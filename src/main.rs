@@ -1,4 +1,5 @@
 use chip8_core::*;
+use sdl2::EventPump;
 use std::env;
 use std::fs::File;
 use std::io::Read;
@@ -23,6 +24,40 @@ fn main() {
         return;
     }
 
+    let (mut canvas, mut event_pump) = setup_window();
+    let mut chip8_game = start_game(&args[1]);
+    
+
+    'gameloop: loop {
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit{..} | Event::KeyDown{keycode: Some(Keycode::Escape), ..} => {
+                    break 'gameloop;
+                },
+                Event::KeyDown{keycode: Some(key), ..} => {
+                    if let Some(k) = keycode_to_index(key) {
+                        chip8_game.set_key_press(k, true);
+                    }
+                },
+                Event::KeyUp{keycode: Some(key), ..} => {
+                    if let Some(k) = keycode_to_index(key) {
+                        chip8_game.set_key_press(k, false);
+                    }
+                },
+                _ => ()
+            }
+        }
+
+        for _ in 0..CYCLES_PER_FRAME {
+            chip8_game.cycle();
+        }
+
+        chip8_game.tick_timers();
+        draw_screen(&chip8_game, &mut canvas);
+    }
+}
+
+fn setup_window() -> (Canvas<Window>, EventPump) {
     //Setup SDL
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
@@ -37,43 +72,21 @@ fn main() {
     canvas.clear();
     canvas.present();
 
-    let mut event_pump = sdl_context.event_pump().unwrap();
+    let event_pump = sdl_context.event_pump().unwrap();
 
+    (canvas, event_pump)
+}
+
+fn start_game(rom_path: &String) -> Emulator {
     let mut chip8 = Emulator::new();
 
-    let mut rom_file = File::open(&args[1]).expect("Unable to open file");
+    let mut rom_file = File::open(rom_path).expect("Unable to open file");
     let mut rom_content = Vec::new();
     rom_file.read_to_end(&mut rom_content).unwrap();
 
     chip8.load_rom(&rom_content);
 
-    'gameloop: loop {
-        for event in event_pump.poll_iter() {
-            match event {
-                Event::Quit{..} | Event::KeyDown{keycode: Some(Keycode::Escape), ..} => {
-                    break 'gameloop;
-                },
-                Event::KeyDown{keycode: Some(key), ..} => {
-                    if let Some(k) = key_to_button(key) {
-                        chip8.set_key_press(k, true);
-                    }
-                },
-                Event::KeyUp{keycode: Some(key), ..} => {
-                    if let Some(k) = key_to_button(key) {
-                        chip8.set_key_press(k, false);
-                    }
-                },
-                _ => ()
-            }
-        }
-
-        for _ in 0..CYCLES_PER_FRAME {
-            chip8.cycle();
-        }
-
-        chip8.tick_timers();
-        draw_screen(&chip8, &mut canvas);
-    }
+    chip8
 }
 
 fn draw_screen(emu: &Emulator, canvas: &mut Canvas<Window>) {
@@ -99,7 +112,7 @@ fn draw_screen(emu: &Emulator, canvas: &mut Canvas<Window>) {
     canvas.present();
 }
 
-fn key_to_button(key: Keycode) -> Option<usize> {
+fn keycode_to_index(key: Keycode) -> Option<usize> {
     match key {
         Keycode::Num1 =>    Some(0x1),
         Keycode::Num2 =>    Some(0x2),
