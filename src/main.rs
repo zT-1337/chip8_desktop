@@ -27,7 +27,6 @@ fn main() {
     let (mut canvas, mut event_pump) = setup_window();
     let mut chip8_game = start_game(&args[1]);
     
-
     'gameloop: loop {
         for event in event_pump.poll_iter() {
             match event {
